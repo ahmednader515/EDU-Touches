@@ -83,8 +83,10 @@ model Course {
 
 enum QuestionType {
   MULTIPLE_CHOICE // اختياري
-  ESSAY          // مقالي
+  ESSAY          // مقالي / فقرة قصيرة
   TRUE_FALSE     // صح وخطأ
+  FILL_IN        // املأ الفراغ
+  MATCH          // مطابقة
 }
 
 model Quiz {

@@ -4,17 +4,29 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useT } from "@/components/LocaleProvider";
 import { CourseFormSaveOverlay } from "../../CourseFormSaveOverlay";
+import {
+  QuizQuestionFields,
+  type QuestionRow,
+} from "@/components/dashboard/QuizQuestionFields";
+import {
+  defaultQuestionOptions,
+  encodeMatchPair,
+  normalizeQuestionType,
+  serializeQuestionOptionsForApi,
+  type QuizQuestionType,
+} from "@/lib/quiz-question-utils";
 
 type CategoryOption = { id: string; name: string; nameAr?: string | null };
 type LessonRow = { title: string; videoUrl: string; content: string; pdfUrl: string; acceptsHomework: boolean };
-type QuestionOptionRow = { text: string; isCorrect: boolean };
-type QuestionRow = { type: "MULTIPLE_CHOICE" | "TRUE_FALSE"; questionText: string; options: QuestionOptionRow[] };
 type QuizRow = { title: string; timeLimitMinutes: string; questions: QuestionRow[] };
 
 export type ContentOrderEntry = { type: "lesson"; index: number } | { type: "quiz"; index: number };
 
-/** API payloads may include legacy ESSAY questions. */
-type InitialQuestionRow = { type: "MULTIPLE_CHOICE" | "ESSAY" | "TRUE_FALSE"; questionText: string; options?: QuestionOptionRow[] };
+type InitialQuestionRow = {
+  type: string;
+  questionText: string;
+  options?: { text: string; isCorrect: boolean }[];
+};
 type InitialQuizRow = { title: string; timeLimitMinutes?: number | null; questions: InitialQuestionRow[] };
 
 type InitialData = {
@@ -42,10 +54,6 @@ export function EditCourseForm({ courseId, initialData }: { courseId: string; in
   const router = useRouter();
   const t = useT();
   const Cf = "dashboard.courseForm";
-  const tfPair = (): QuestionOptionRow[] => [
-    { text: t(`${Cf}.trueOption`), isCorrect: true },
-    { text: t(`${Cf}.falseOption`), isCorrect: false },
-  ];
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -112,15 +120,14 @@ export function EditCourseForm({ courseId, initialData }: { courseId: string; in
           timeLimitMinutes: q.timeLimitMinutes != null ? String(q.timeLimitMinutes) : "",
           questions: q.questions.length > 0
             ? q.questions.map((qt) => {
-                const type = qt.type === "ESSAY" ? "MULTIPLE_CHOICE" as const : qt.type;
+                const type = normalizeQuestionType(qt.type);
                 const options =
-                  qt.type === "TRUE_FALSE"
-                    ? qt.options?.length
-                      ? qt.options
-                      : tfPair()
-                    : qt.options?.length
-                      ? qt.options
-                      : [{ text: "", isCorrect: false }];
+                  qt.options?.length
+                    ? qt.options
+                    : defaultQuestionOptions(type, {
+                        trueLabel: t(`${Cf}.trueOption`),
+                        falseLabel: t(`${Cf}.falseOption`),
+                      });
                 return { type, questionText: qt.questionText, options };
               })
             : [{ type: "MULTIPLE_CHOICE" as const, questionText: "", options: [{ text: "", isCorrect: false }] }],
@@ -190,7 +197,7 @@ export function EditCourseForm({ courseId, initialData }: { courseId: string; in
       )
     );
   }
-  function setQuestionType(qi: number, qti: number, type: "MULTIPLE_CHOICE" | "TRUE_FALSE") {
+  function setQuestionType(qi: number, qti: number, type: QuizQuestionType) {
     setQuizzes((q) =>
       q.map((x, i) =>
         i === qi
@@ -201,15 +208,50 @@ export function EditCourseForm({ courseId, initialData }: { courseId: string; in
                   ? {
                       ...qt,
                       type,
-                      options:
-                        type === "MULTIPLE_CHOICE"
-                          ? qt.options.length ? qt.options : [{ text: "", isCorrect: false }]
-                          : tfPair(),
+                      options: defaultQuestionOptions(type, {
+                        trueLabel: t(`${Cf}.trueOption`),
+                        falseLabel: t(`${Cf}.falseOption`),
+                      }),
                     }
                   : qt
               ),
             }
           : x
+      )
+    );
+  }
+  function addMatchPair(qi: number, qti: number) {
+    setQuizzes((q) =>
+      q.map((x, i) =>
+        i === qi
+          ? {
+              ...x,
+              questions: x.questions.map((qt, j) =>
+                j === qti
+                  ? {
+                      ...qt,
+                      options: [...qt.options, { text: encodeMatchPair("", ""), isCorrect: true }],
+                    }
+                  : qt
+              ),
+            }
+          : x
+      )
+    );
+  }
+  function setCorrectOption(qi: number, qti: number, oi: number) {
+    setQuizzes((prev) =>
+      prev.map((qu, i) =>
+        i === qi
+          ? {
+              ...qu,
+              questions: qu.questions.map((qt, j) =>
+                j === qti
+                  ? { ...qt, options: qt.options.map((o, oi2) => ({ ...o, isCorrect: oi2 === oi })) }
+                  : qt
+              ),
+            }
+          : qu
       )
     );
   }
@@ -274,12 +316,7 @@ export function EditCourseForm({ courseId, initialData }: { courseId: string; in
           .map((qt) => ({
             type: qt.type,
             questionText: qt.questionText.trim(),
-            options:
-              qt.type === "MULTIPLE_CHOICE"
-                ? qt.options.filter((o) => o.text.trim()).map((o) => ({ text: o.text.trim(), isCorrect: o.isCorrect }))
-                : qt.type === "TRUE_FALSE"
-                  ? qt.options.map((o) => ({ text: o.text, isCorrect: o.isCorrect }))
-                  : undefined,
+            options: serializeQuestionOptionsForApi(qt),
           })),
       }));
     const validLessonIndices = lessons.map((l, i) => (l.title.trim() ? i : -1)).filter((i) => i >= 0);
@@ -577,60 +614,21 @@ export function EditCourseForm({ courseId, initialData }: { courseId: string; in
               <p className="mt-1 text-xs text-[var(--color-muted)]">{t(`${Cf}.quizTimeHelp`)}</p>
             </div>
             {quiz.questions.map((q, qti) => (
-              <div key={qti} className="mb-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-medium">{t(`${Cf}.questionNPrefix`)}{qti + 1}</span>
-                  <select value={q.type} onChange={(e) => setQuestionType(qi, qti, e.target.value as "MULTIPLE_CHOICE" | "TRUE_FALSE")} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-sm">
-                    <option value="MULTIPLE_CHOICE">{t(`${Cf}.mcqShort`)}</option>
-                    <option value="TRUE_FALSE">{t(`${Cf}.tfShort`)}</option>
-                  </select>
-                  {quiz.questions.length > 1 && (
-                    <button type="button" onClick={() => removeQuestion(qi, qti)} className="text-sm text-red-600 hover:underline">{t(`${Cf}.deleteQuestionBtn`)}</button>
-                  )}
-                </div>
-                <textarea value={q.questionText} onChange={(e) => updateQuestion(qi, qti, "questionText", e.target.value)} placeholder={t(`${Cf}.questionTextPlaceholder`)} rows={2} className="mb-2 w-full rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-sm" />
-                {(q.type === "MULTIPLE_CHOICE" || q.type === "TRUE_FALSE") && (
-                  <div className="space-y-1">
-                    <p className="text-xs text-[var(--color-muted)]">
-                      {q.type === "TRUE_FALSE" ? t(`${Cf}.tfAnswerHintLine`) : t(`${Cf}.mcqOptionsHint`)}
-                    </p>
-                    {q.options.map((opt, oi) => (
-                      <div key={oi} className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={opt.text}
-                          onChange={(e) => updateOption(qi, qti, oi, "text", e.target.value)}
-                          placeholder={q.type === "TRUE_FALSE" ? (oi === 0 ? t(`${Cf}.tfExampleTrue`) : t(`${Cf}.tfExampleFalse`)) : `${t(`${Cf}.optionPlaceholderMcqPrefix`)}${oi + 1}`}
-                          className="flex-1 rounded border border-[var(--color-border)] px-2 py-1 text-sm"
-                        />
-                        <label className="flex items-center gap-1 text-sm whitespace-nowrap">
-                          <input
-                            type="radio"
-                            name={`q-${qi}-${qti}-correct`}
-                            checked={opt.isCorrect}
-                            onChange={() => {
-                              setQuizzes((prev) =>
-                                prev.map((qu, i) =>
-                                  i === qi
-                                    ? { ...qu, questions: qu.questions.map((qt, j) => (j === qti ? { ...qt, options: qt.options.map((o, oi2) => ({ ...o, isCorrect: oi2 === oi })) } : qt)) }
-                                    : qu
-                                )
-                              );
-                            }}
-                          />
-                          {t(`${Cf}.correctBadge`)}
-                        </label>
-                        {q.type === "MULTIPLE_CHOICE" && q.options.length > 1 && (
-                          <button type="button" onClick={() => removeOption(qi, qti, oi)} className="text-red-600 text-sm">×</button>
-                        )}
-                      </div>
-                    ))}
-                    {q.type === "MULTIPLE_CHOICE" && (
-                      <button type="button" onClick={() => addOption(qi, qti)} className="text-sm text-[var(--color-primary)] hover:underline">{t(`${Cf}.addOptionBtn`)}</button>
-                    )}
-                  </div>
-                )}
-              </div>
+              <QuizQuestionFields
+                key={qti}
+                qi={qi}
+                qti={qti}
+                q={q}
+                quizQuestionCount={quiz.questions.length}
+                onSetType={(type) => setQuestionType(qi, qti, type)}
+                onUpdateQuestionText={(text) => updateQuestion(qi, qti, "questionText", text)}
+                onRemoveQuestion={() => removeQuestion(qi, qti)}
+                onAddOption={() => addOption(qi, qti)}
+                onRemoveOption={(oi) => removeOption(qi, qti, oi)}
+                onUpdateOption={(oi, field, value) => updateOption(qi, qti, oi, field, value)}
+                onSetCorrectOption={(oi) => setCorrectOption(qi, qti, oi)}
+                onAddMatchPair={() => addMatchPair(qi, qti)}
+              />
             ))}
             <button type="button" onClick={() => addQuestion(qi)} className="mb-2 text-sm text-[var(--color-primary)] hover:underline">{t(`${Cf}.addQuestionBtn`)}</button>
           </div>

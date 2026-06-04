@@ -93,7 +93,7 @@ CREATE INDEX IF NOT EXISTS "Quiz_course_id_idx" ON "Quiz"(course_id);
 CREATE TABLE IF NOT EXISTS "Question" (
   id            TEXT PRIMARY KEY,
   quiz_id       TEXT NOT NULL REFERENCES "Quiz"(id) ON DELETE CASCADE,
-  type          TEXT NOT NULL CHECK (type IN ('MULTIPLE_CHOICE', 'ESSAY', 'TRUE_FALSE')),
+  type          TEXT NOT NULL CHECK (type IN ('MULTIPLE_CHOICE', 'ESSAY', 'TRUE_FALSE', 'FILL_IN', 'MATCH')),
   question_text TEXT NOT NULL,
   "order"       INT NOT NULL DEFAULT 0,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -3718,7 +3718,7 @@ export async function createQuiz(data: { course_id: string; title: string; order
 
 export async function createQuestion(data: {
   quiz_id: string;
-  type: "MULTIPLE_CHOICE" | "ESSAY" | "TRUE_FALSE";
+  type: "MULTIPLE_CHOICE" | "ESSAY" | "TRUE_FALSE" | "FILL_IN" | "MATCH";
   question_text: string;
   order: number;
 }): Promise<Question> {

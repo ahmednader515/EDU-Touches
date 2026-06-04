@@ -13,6 +13,11 @@ import {
   createCategory,
   categoryIsManageableOnDashboard,
 } from "@/lib/db";
+import {
+  normalizeQuestionType,
+  createOptionsForQuestion,
+  type QuestionInput,
+} from "@/lib/quiz-question-utils";
 
 export async function GET() {
   try {
@@ -28,8 +33,6 @@ export async function GET() {
 }
 
 type LessonInput = { title: string; titleAr?: string; videoUrl?: string; content?: string; pdfUrl?: string };
-type QuestionOptionInput = { text: string; isCorrect: boolean };
-type QuestionInput = { type: "MULTIPLE_CHOICE" | "ESSAY" | "TRUE_FALSE"; questionText: string; options?: QuestionOptionInput[] };
 type QuizInput = { title: string; timeLimitMinutes?: number | null; questions: QuestionInput[] };
 
 export async function POST(request: NextRequest) {
@@ -184,22 +187,14 @@ export async function POST(request: NextRequest) {
     const questions = q.questions ?? [];
     for (let qti = 0; qti < questions.length; qti++) {
       const qt = questions[qti];
-      const qType = qt.type === "ESSAY" ? "ESSAY" : qt.type === "TRUE_FALSE" ? "TRUE_FALSE" : "MULTIPLE_CHOICE";
+      const qType = normalizeQuestionType(qt.type);
       const question = await createQuestion({
         quiz_id: quiz.id,
         type: qType,
         question_text: qt.questionText?.trim() || "",
         order: qti + 1,
       });
-      if ((qt.type === "MULTIPLE_CHOICE" || qt.type === "TRUE_FALSE") && Array.isArray(qt.options)) {
-        for (const opt of qt.options) {
-          await createQuestionOption({
-            question_id: question.id,
-            text: opt.text?.trim() || "",
-            is_correct: !!opt.isCorrect,
-          });
-        }
-      }
+      await createOptionsForQuestion(createQuestionOption, question.id, qt);
     }
   }
 

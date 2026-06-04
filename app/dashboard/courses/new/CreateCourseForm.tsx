@@ -4,11 +4,19 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useT } from "@/components/LocaleProvider";
 import { CourseFormSaveOverlay } from "../CourseFormSaveOverlay";
+import {
+  QuizQuestionFields,
+  type QuestionRow,
+} from "@/components/dashboard/QuizQuestionFields";
+import {
+  defaultQuestionOptions,
+  encodeMatchPair,
+  serializeQuestionOptionsForApi,
+  type QuizQuestionType,
+} from "@/lib/quiz-question-utils";
 
 type CategoryOption = { id: string; name: string; nameAr?: string | null };
 type LessonRow = { title: string; videoUrl: string; content: string; pdfUrl: string; acceptsHomework: boolean };
-type QuestionOptionRow = { text: string; isCorrect: boolean };
-type QuestionRow = { type: "MULTIPLE_CHOICE" | "TRUE_FALSE"; questionText: string; options: QuestionOptionRow[] };
 type QuizRow = { title: string; timeLimitMinutes: string; questions: QuestionRow[] };
 type ContentOrderEntry = { type: "lesson"; index: number } | { type: "quiz"; index: number };
 
@@ -127,7 +135,7 @@ export function CreateCourseForm() {
       )
     );
   }
-  function setQuestionType(qi: number, qti: number, type: "MULTIPLE_CHOICE" | "TRUE_FALSE") {
+  function setQuestionType(qi: number, qti: number, type: QuizQuestionType) {
     setQuizzes((q) =>
       q.map((x, i) =>
         i === qi
@@ -138,18 +146,50 @@ export function CreateCourseForm() {
                   ? {
                       ...qt,
                       type,
-                      options:
-                        type === "MULTIPLE_CHOICE"
-                          ? qt.options.length ? qt.options : [{ text: "", isCorrect: false }]
-                          : [
-                                { text: t(`${Cf}.trueOption`), isCorrect: true },
-                                { text: t(`${Cf}.falseOption`), isCorrect: false },
-                              ],
+                      options: defaultQuestionOptions(type, {
+                        trueLabel: t(`${Cf}.trueOption`),
+                        falseLabel: t(`${Cf}.falseOption`),
+                      }),
                     }
                   : qt
               ),
             }
           : x
+      )
+    );
+  }
+  function addMatchPair(qi: number, qti: number) {
+    setQuizzes((q) =>
+      q.map((x, i) =>
+        i === qi
+          ? {
+              ...x,
+              questions: x.questions.map((qt, j) =>
+                j === qti
+                  ? {
+                      ...qt,
+                      options: [...qt.options, { text: encodeMatchPair("", ""), isCorrect: true }],
+                    }
+                  : qt
+              ),
+            }
+          : x
+      )
+    );
+  }
+  function setCorrectOption(qi: number, qti: number, oi: number) {
+    setQuizzes((prev) =>
+      prev.map((qu, i) =>
+        i === qi
+          ? {
+              ...qu,
+              questions: qu.questions.map((qt, j) =>
+                j === qti
+                  ? { ...qt, options: qt.options.map((o, oi2) => ({ ...o, isCorrect: oi2 === oi })) }
+                  : qt
+              ),
+            }
+          : qu
       )
     );
   }
@@ -217,12 +257,7 @@ export function CreateCourseForm() {
           .map((qt) => ({
             type: qt.type,
             questionText: qt.questionText.trim(),
-            options:
-              qt.type === "MULTIPLE_CHOICE"
-                ? qt.options.filter((o) => o.text.trim()).map((o) => ({ text: o.text.trim(), isCorrect: o.isCorrect }))
-                : qt.type === "TRUE_FALSE"
-                  ? qt.options.map((o) => ({ text: o.text, isCorrect: o.isCorrect }))
-                  : undefined,
+            options: serializeQuestionOptionsForApi(qt),
           })),
       }));
     const validLessonIndices = lessons.map((l, i) => (l.title.trim() ? i : -1)).filter((i) => i >= 0);
@@ -627,85 +662,21 @@ export function CreateCourseForm() {
               <p className="mt-1 text-xs text-[var(--color-muted)]">{t(`${Cf}.quizTimeHelp`)}</p>
             </div>
             {quiz.questions.map((q, qti) => (
-              <div key={qti} className="mb-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-medium">{t(`${Cf}.questionNPrefix`)}{qti + 1}</span>
-                  <select
-                    value={q.type}
-                    onChange={(e) => setQuestionType(qi, qti, e.target.value as "MULTIPLE_CHOICE" | "TRUE_FALSE")}
-                    className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-sm"
-                  >
-                    <option value="MULTIPLE_CHOICE">{t(`${Cf}.mcqShort`)}</option>
-                    <option value="TRUE_FALSE">{t(`${Cf}.tfShort`)}</option>
-                  </select>
-                  {quiz.questions.length > 1 && (
-                    <button type="button" onClick={() => removeQuestion(qi, qti)} className="text-sm text-red-600 hover:underline">
-                      {t(`${Cf}.deleteQuestionBtn`)}
-                    </button>
-                  )}
-                </div>
-                <textarea
-                  value={q.questionText}
-                  onChange={(e) => updateQuestion(qi, qti, "questionText", e.target.value)}
-                  placeholder={t(`${Cf}.questionTextPlaceholder`)}
-                  rows={2}
-                  className="mb-2 w-full rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-sm"
-                />
-                {(q.type === "MULTIPLE_CHOICE" || q.type === "TRUE_FALSE") && (
-                  <div className="space-y-1">
-                    <p className="text-xs text-[var(--color-muted)]">
-                      {q.type === "TRUE_FALSE" ? t(`${Cf}.tfAnswerHintLine`) : t(`${Cf}.mcqOptionsHint`)}
-                    </p>
-                    {q.options.map((opt, oi) => (
-                      <div key={oi} className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={opt.text}
-                          onChange={(e) => updateOption(qi, qti, oi, "text", e.target.value)}
-                          placeholder={
-                            q.type === "TRUE_FALSE"
-                              ? (oi === 0 ? t(`${Cf}.tfExampleTrue`) : t(`${Cf}.tfExampleFalse`))
-                              : `${t(`${Cf}.optionPlaceholderMcqPrefix`)}${oi + 1}`
-                          }
-                          className="flex-1 rounded border border-[var(--color-border)] px-2 py-1 text-sm"
-                        />
-                        <label className="flex items-center gap-1 text-sm whitespace-nowrap">
-                          <input
-                            type="radio"
-                            name={`q-${qi}-${qti}-correct`}
-                            checked={opt.isCorrect}
-                            onChange={() => {
-                              setQuizzes((prev) =>
-                                prev.map((qu, i) =>
-                                  i === qi
-                                    ? {
-                                        ...qu,
-                                        questions: qu.questions.map((qt, j) =>
-                                          j === qti ? { ...qt, options: qt.options.map((o, oi2) => ({ ...o, isCorrect: oi2 === oi })) } : qt
-                                        ),
-                                      }
-                                    : qu
-                                )
-                              );
-                            }}
-                          />
-                          {t(`${Cf}.correctBadge`)}
-                        </label>
-                        {q.type === "MULTIPLE_CHOICE" && q.options.length > 1 && (
-                          <button type="button" onClick={() => removeOption(qi, qti, oi)} className="text-red-600 text-sm">
-                            ×
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    {q.type === "MULTIPLE_CHOICE" && (
-                      <button type="button" onClick={() => addOption(qi, qti)} className="text-sm text-[var(--color-primary)] hover:underline">
-                        {t(`${Cf}.addOptionBtn`)}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+              <QuizQuestionFields
+                key={qti}
+                qi={qi}
+                qti={qti}
+                q={q}
+                quizQuestionCount={quiz.questions.length}
+                onSetType={(type) => setQuestionType(qi, qti, type)}
+                onUpdateQuestionText={(text) => updateQuestion(qi, qti, "questionText", text)}
+                onRemoveQuestion={() => removeQuestion(qi, qti)}
+                onAddOption={() => addOption(qi, qti)}
+                onRemoveOption={(oi) => removeOption(qi, qti, oi)}
+                onUpdateOption={(oi, field, value) => updateOption(qi, qti, oi, field, value)}
+                onSetCorrectOption={(oi) => setCorrectOption(qi, qti, oi)}
+                onAddMatchPair={() => addMatchPair(qi, qti)}
+              />
             ))}
             <button type="button" onClick={() => addQuestion(qi)} className="mb-2 text-sm text-[var(--color-primary)] hover:underline">
               {t(`${Cf}.addQuestionBtn`)}

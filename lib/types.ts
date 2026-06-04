@@ -347,7 +347,7 @@ export interface Lesson {
   updated_at: Date;
 }
 
-export type QuestionType = "MULTIPLE_CHOICE" | "ESSAY" | "TRUE_FALSE";
+export type QuestionType = "MULTIPLE_CHOICE" | "ESSAY" | "TRUE_FALSE" | "FILL_IN" | "MATCH";
 
 export interface Quiz {
   id: string;

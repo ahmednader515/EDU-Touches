@@ -1,8 +1,153 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type { QuizApiPayload } from "./QuizPageClient";
 import { useT } from "@/components/LocaleProvider";
+import {
+  decodeMatchPair,
+  isAutoGradedType,
+  scoreFillInAnswer,
+  scoreMatchAnswer,
+} from "@/lib/quiz-question-utils";
+
+type QuizQuestion = QuizApiPayload["questions"][number];
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function isQuestionAnswered(q: QuizQuestion, answers: Record<string, string>): boolean {
+  const a = answers[q.id];
+  if (q.type === "ESSAY") return a !== undefined && a.trim() !== "";
+  if (q.type === "FILL_IN") return a !== undefined && a.trim() !== "";
+  if (q.type === "MATCH") {
+    if (!a) return false;
+    try {
+      const mapping = JSON.parse(a) as Record<string, string>;
+      return q.options.every((opt) => !!mapping[opt.id]);
+    } catch {
+      return false;
+    }
+  }
+  if (q.type === "MULTIPLE_CHOICE" || q.type === "TRUE_FALSE") {
+    return a !== undefined && a !== "";
+  }
+  return true;
+}
+
+function scoreQuestion(q: QuizQuestion, answers: Record<string, string>): number {
+  const a = answers[q.id];
+  if (!isAutoGradedType(q.type)) return 0;
+  if (q.type === "MULTIPLE_CHOICE" || q.type === "TRUE_FALSE") {
+    const opt = q.options.find((o) => o.id === a);
+    return opt?.isCorrect ? 1 : 0;
+  }
+  if (q.type === "FILL_IN") {
+    return scoreFillInAnswer(a ?? "", q.options) ? 1 : 0;
+  }
+  if (q.type === "MATCH") {
+    return scoreMatchAnswer(a ?? "{}", q.options) ? 1 : 0;
+  }
+  return 0;
+}
+
+function questionTypeLabel(q: QuizQuestion, t: (key: string, fallback?: string) => string): string {
+  switch (q.type) {
+    case "MULTIPLE_CHOICE":
+      return t("quiz.multipleChoice", "Multiple choice");
+    case "TRUE_FALSE":
+      return t("quiz.trueFalse", "True/False");
+    case "ESSAY":
+      return t("quiz.shortParagraph", "Short paragraph");
+    case "FILL_IN":
+      return t("quiz.fillIn", "Fill in the blank");
+    case "MATCH":
+      return t("quiz.match", "Match");
+    default:
+      return t("quiz.essay", "Essay");
+  }
+}
+
+function MatchQuestion({
+  q,
+  answers,
+  submitted,
+  setAnswer,
+}: {
+  q: QuizQuestion;
+  answers: Record<string, string>;
+  submitted: boolean;
+  setAnswer: (questionId: string, value: string) => void;
+}) {
+  const t = useT();
+  const rightChoices = useMemo(
+    () =>
+      shuffleArray(
+        q.options
+          .map((opt) => {
+            const pair = decodeMatchPair(opt.text);
+            return pair ? { id: opt.id, label: pair.right } : null;
+          })
+          .filter((x): x is { id: string; label: string } => x !== null)
+      ),
+    [q.id, q.options]
+  );
+
+  let mapping: Record<string, string> = {};
+  try {
+    mapping = answers[q.id] ? (JSON.parse(answers[q.id]) as Record<string, string>) : {};
+  } catch {
+    mapping = {};
+  }
+
+  function setMatch(leftId: string, rightOptionId: string) {
+    const next = { ...mapping, [leftId]: rightOptionId };
+    setAnswer(q.id, JSON.stringify(next));
+  }
+
+  return (
+    <ul className="mt-4 space-y-3">
+      {q.options.map((opt) => {
+        const pair = decodeMatchPair(opt.text);
+        if (!pair) return null;
+        const selectedId = mapping[opt.id] ?? "";
+        const isCorrect =
+          submitted &&
+          selectedId &&
+          scoreMatchAnswer(JSON.stringify({ [opt.id]: selectedId }), [opt]);
+        return (
+          <li key={opt.id} className="flex flex-wrap items-center gap-2">
+            <span className="min-w-[8rem] font-medium text-[var(--color-foreground)]">{pair.left}</span>
+            <select
+              value={selectedId}
+              onChange={(e) => setMatch(opt.id, e.target.value)}
+              disabled={submitted}
+              className="min-w-[10rem] flex-1 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-2 text-sm"
+            >
+              <option value="">{t("quiz.matchSelectPlaceholder", "Select a match")}</option>
+              {rightChoices.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+            {submitted && isCorrect && (
+              <span className="text-sm text-[var(--color-success)]">✓ {t("quiz.correctAnswer", "Correct answer")}</span>
+            )}
+            {submitted && selectedId && !isCorrect && (
+              <span className="text-sm text-red-600">✗</span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 export function QuizTake({ quiz }: { quiz: QuizApiPayload }) {
   const t = useT();
@@ -32,41 +177,17 @@ export function QuizTake({ quiz }: { quiz: QuizApiPayload }) {
     setAnswers((a) => ({ ...a, [questionId]: value }));
   }
 
-  const allAnswered = quiz.questions.every((q) => {
-    const a = answers[q.id];
-    if (q.type === "MULTIPLE_CHOICE" || q.type === "TRUE_FALSE") return a !== undefined && a !== "";
-    return true;
-  });
+  const allAnswered = quiz.questions.every((q) => isQuestionAnswered(q, answers));
 
-  const totalScored = quiz.questions.filter(
-    (q) => q.type === "MULTIPLE_CHOICE" || q.type === "TRUE_FALSE"
-  ).length;
+  const totalScored = quiz.questions.filter((q) => isAutoGradedType(q.type)).length;
 
-  function calculateScore() {
-    let s = 0;
-    quiz.questions.forEach((q) => {
-      if (q.type === "MULTIPLE_CHOICE" || q.type === "TRUE_FALSE") {
-        const opt = q.options.find((o) => o.id === answers[q.id]);
-        if (opt?.isCorrect) s++;
-      }
-    });
-    return s;
-  }
-
-  function calculateScoreFromAnswers(ans: Record<string, string>) {
-    let s = 0;
-    quiz.questions.forEach((q) => {
-      if (q.type === "MULTIPLE_CHOICE" || q.type === "TRUE_FALSE") {
-        const opt = q.options.find((o) => o.id === ans[q.id]);
-        if (opt?.isCorrect) s++;
-      }
-    });
-    return s;
+  function calculateScore(ans: Record<string, string> = answers) {
+    return quiz.questions.reduce((sum, q) => sum + scoreQuestion(q, ans), 0);
   }
 
   const submitAnswers = useCallback(
     async (reason?: "timeup") => {
-      const s = reason === "timeup" ? calculateScoreFromAnswers(answersRef.current) : calculateScore();
+      const s = reason === "timeup" ? calculateScore(answersRef.current) : calculateScore();
       setSubmitting(true);
       try {
         const res = await fetch(`/api/quizzes/${encodeURIComponent(quiz.id)}`, {
@@ -123,7 +244,6 @@ export function QuizTake({ quiz }: { quiz: QuizApiPayload }) {
     await submitAnswers();
   }
 
-  // مؤقت: عد تنازلي — إيقاف المؤقت عند الوصول لصفر ثم تسليم تلقائي (إجابات حالية فقط)
   useEffect(() => {
     timeUpSubmitStartedRef.current = false;
     if (!started || submitted || totalSeconds <= 0) return;
@@ -152,21 +272,19 @@ export function QuizTake({ quiz }: { quiz: QuizApiPayload }) {
     void submitAnswers("timeup");
   }, [remainingSeconds, started, submitted, submitAnswers, totalSeconds]);
 
-  // إخفاء الإشعار بعد 4 ثوانٍ
   useEffect(() => {
     if (!toastMessage) return;
-    const t = setTimeout(() => setToastMessage(null), 4000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setToastMessage(null), 4000);
+    return () => clearTimeout(timer);
   }, [toastMessage]);
 
-  let score = 0;
-  if (submitted) {
-    score = calculateScore();
-  }
+  const score = submitted ? calculateScore() : 0;
 
   const mm = Math.floor(remainingSeconds / 60);
   const ss = remainingSeconds % 60;
   const timeDisplay = `${mm}:${ss.toString().padStart(2, "0")}`;
+
+  const hasEssay = quiz.questions.some((q) => q.type === "ESSAY");
 
   return (
     <div className="mt-8 space-y-8">
@@ -182,7 +300,8 @@ export function QuizTake({ quiz }: { quiz: QuizApiPayload }) {
       {!submitted && started && totalSeconds > 0 && (
         <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
           <p className="text-sm font-medium text-[var(--color-foreground)]">
-            {t("quiz.remainingTime", "Time left:")} <span className="font-mono text-[var(--color-primary)]">{timeDisplay}</span>
+            {t("quiz.remainingTime", "Time left:")}{" "}
+            <span className="font-mono text-[var(--color-primary)]">{timeDisplay}</span>
           </p>
         </div>
       )}
@@ -191,9 +310,12 @@ export function QuizTake({ quiz }: { quiz: QuizApiPayload }) {
         <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
           <h3 className="text-lg font-semibold text-[var(--color-foreground)]">{t("quiz.readyTitle", "Ready to start the quiz?")}</h3>
           <p className="mt-2 text-sm text-[var(--color-muted)]">
-            {t("quiz.readySubtitle", "When you click \"Start quiz\", one attempt will be counted.")}
+            {t("quiz.readySubtitle", 'When you click "Start quiz", one attempt will be counted.')}
             {maxQuizAttempts != null && attemptsUsed != null ? (
-              <span className="mr-1"> ({t("quiz.usedAttempts", "Used")}: {attemptsUsed} {t("quiz.fromAttempts", "of")} {maxQuizAttempts})</span>
+              <span className="mr-1">
+                {" "}
+                ({t("quiz.usedAttempts", "Used")}: {attemptsUsed} {t("quiz.fromAttempts", "of")} {maxQuizAttempts})
+              </span>
             ) : null}
           </p>
           {!canAttempt ? (
@@ -216,56 +338,76 @@ export function QuizTake({ quiz }: { quiz: QuizApiPayload }) {
 
       {started
         ? quiz.questions.map((q, i) => (
-        <div
-          key={q.id}
-          className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6"
-        >
-          <p className="font-medium text-[var(--color-foreground)]">
-            {i + 1}. {q.questionText}
-          </p>
-          <span className="mt-1 block text-xs text-[var(--color-muted)]">
-            {q.type === "MULTIPLE_CHOICE"
-              ? t("quiz.multipleChoice", "Multiple choice")
-              : q.type === "TRUE_FALSE"
-                ? t("quiz.trueFalse", "True/False")
-                : t("quiz.essay", "Essay")}
-          </span>
-          {q.type === "MULTIPLE_CHOICE" || q.type === "TRUE_FALSE" ? (
-            <ul className="mt-4 space-y-2">
-              {q.options.map((opt) => (
-                <li key={opt.id}>
-                  <label className="flex cursor-pointer items-center gap-2 rounded border border-[var(--color-border)] p-3 hover:bg-[var(--color-background)]">
-                    <input
-                      type="radio"
-                      name={q.id}
-                      value={opt.id}
-                      checked={answers[q.id] === opt.id}
-                      onChange={() => setAnswer(q.id, opt.id)}
-                      disabled={submitted}
-                    />
-                    <span>{opt.text}</span>
-                    {submitted && opt.isCorrect && (
-                      <span className="text-sm text-[var(--color-success)]">✓ {t("quiz.correctAnswer", "Correct answer")}</span>
-                    )}
-                    {submitted && answers[q.id] === opt.id && !opt.isCorrect && (
-                      <span className="text-sm text-red-600">✗</span>
-                    )}
-                  </label>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <textarea
-              value={answers[q.id] ?? ""}
-              onChange={(e) => setAnswer(q.id, e.target.value)}
-              placeholder={t("quiz.essayPlaceholder", "Write your answer here...")}
-              rows={4}
-              disabled={submitted}
-              className="mt-4 w-full rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2"
-            />
-          )}
-        </div>
-      ))
+            <div
+              key={q.id}
+              className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6"
+            >
+              <p className="font-medium text-[var(--color-foreground)]">
+                {i + 1}. {q.questionText}
+              </p>
+              <span className="mt-1 block text-xs text-[var(--color-muted)]">{questionTypeLabel(q, t)}</span>
+              {q.type === "MULTIPLE_CHOICE" || q.type === "TRUE_FALSE" ? (
+                <ul className="mt-4 space-y-2">
+                  {q.options.map((opt) => (
+                    <li key={opt.id}>
+                      <label className="flex cursor-pointer items-center gap-2 rounded border border-[var(--color-border)] p-3 hover:bg-[var(--color-background)]">
+                        <input
+                          type="radio"
+                          name={q.id}
+                          value={opt.id}
+                          checked={answers[q.id] === opt.id}
+                          onChange={() => setAnswer(q.id, opt.id)}
+                          disabled={submitted}
+                        />
+                        <span>{opt.text}</span>
+                        {submitted && opt.isCorrect && (
+                          <span className="text-sm text-[var(--color-success)]">
+                            ✓ {t("quiz.correctAnswer", "Correct answer")}
+                          </span>
+                        )}
+                        {submitted && answers[q.id] === opt.id && !opt.isCorrect && (
+                          <span className="text-sm text-red-600">✗</span>
+                        )}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              ) : q.type === "FILL_IN" ? (
+                <div className="mt-4">
+                  <input
+                    type="text"
+                    value={answers[q.id] ?? ""}
+                    onChange={(e) => setAnswer(q.id, e.target.value)}
+                    placeholder={t("quiz.fillInPlaceholder", "Type your answer...")}
+                    disabled={submitted}
+                    className="w-full rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2"
+                  />
+                  {submitted && (
+                    <p className="mt-2 text-sm">
+                      {scoreFillInAnswer(answers[q.id] ?? "", q.options) ? (
+                        <span className="text-[var(--color-success)]">
+                          ✓ {t("quiz.correctAnswer", "Correct answer")}
+                        </span>
+                      ) : (
+                        <span className="text-red-600">✗</span>
+                      )}
+                    </p>
+                  )}
+                </div>
+              ) : q.type === "MATCH" ? (
+                <MatchQuestion q={q} answers={answers} submitted={submitted} setAnswer={setAnswer} />
+              ) : (
+                <textarea
+                  value={answers[q.id] ?? ""}
+                  onChange={(e) => setAnswer(q.id, e.target.value)}
+                  placeholder={t("quiz.essayPlaceholder", "Write your answer here...")}
+                  rows={4}
+                  disabled={submitted}
+                  className="mt-4 w-full rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2"
+                />
+              )}
+            </div>
+          ))
         : null}
 
       {!submitted && started ? (
@@ -280,11 +422,17 @@ export function QuizTake({ quiz }: { quiz: QuizApiPayload }) {
       ) : (
         <div className="rounded-[var(--radius-card)] border border-[var(--color-primary)] bg-[var(--color-primary-light)]/30 p-6">
           <p className="text-lg font-semibold text-[var(--color-foreground)]">
-            {t("quiz.resultPrefix", "Your score in MCQ/True-False questions:")} {score} {t("quiz.from", "out of")} {totalScored}
+            {t("quiz.resultPrefix", "Your score in auto-graded questions:")} {score} {t("quiz.from", "out of")}{" "}
+            {totalScored}
           </p>
-          <p className="mt-2 text-sm text-[var(--color-muted)]">
-            {t("quiz.essayNotAutoCorrected", "Essay questions are not auto-graded; the teacher can review them later.")}
-          </p>
+          {hasEssay && (
+            <p className="mt-2 text-sm text-[var(--color-muted)]">
+              {t(
+                "quiz.essayNotAutoCorrected",
+                "Short paragraph questions are not auto-graded; the teacher can review them later."
+              )}
+            </p>
+          )}
         </div>
       )}
     </div>

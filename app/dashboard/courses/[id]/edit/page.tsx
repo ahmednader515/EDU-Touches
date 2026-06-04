@@ -93,7 +93,7 @@ export default async function EditCoursePage({ params }: Props) {
         title: String(row.title ?? ""),
         timeLimitMinutes: timeLimitMinutes != null && Number.isFinite(timeLimitMinutes) && timeLimitMinutes >= 1 ? timeLimitMinutes : null,
         questions: questions.map((qt) => ({
-          type: (qt.type === "ESSAY" || qt.type === "TRUE_FALSE" ? qt.type : "MULTIPLE_CHOICE") as "MULTIPLE_CHOICE" | "ESSAY" | "TRUE_FALSE",
+          type: String(qt.type ?? "MULTIPLE_CHOICE"),
           questionText: String(qt.questionText ?? qt.question_text ?? ""),
           options: ((qt.options ?? []) as Array<Record<string, unknown>>).map((o) => ({
             text: String(o.text ?? ""),
