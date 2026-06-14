@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import NextTopLoader from "nextjs-toploader";
-import { getServerSession } from "next-auth";
+import { getAppServerSession } from "@/lib/get-app-server-session";
 import "./globals.css";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -9,7 +9,6 @@ import { SessionProvider } from "@/components/SessionProvider";
 import { StoreSplashProvider } from "@/components/StoreSplashProvider";
 import { InspectGuard } from "@/components/InspectGuard";
 import { ForceLogoutGuard } from "@/components/ForceLogoutGuard";
-import { authOptions } from "@/lib/auth";
 import {
   getHomepageSettings,
   userHasActivePlatformSubscription,
@@ -104,7 +103,7 @@ export default async function RootLayout({
 
   let platformSubscriptionExpiryLabel: string | null = null;
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getAppServerSession();
     if (session?.user?.role === "STUDENT" && session.user.id) {
       const active = await userHasActivePlatformSubscription(session.user.id);
       if (active) {

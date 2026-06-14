@@ -1,48 +1,45 @@
-import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
+import { nextAuthSecret, safeJwtDecode } from "@/lib/auth-jwt";
+import { applyDashboardRoleChecks, purgeInvalidSessionCookies } from "@/lib/middleware-auth";
 
-export default withAuth(
-  function middleware(req) {
-    const role = req.nextauth.token?.role as string;
-    const path = req.nextUrl.pathname;
+export async function middleware(req: NextRequest) {
+  let response = NextResponse.next();
+  response = await purgeInvalidSessionCookies(req, response);
 
-    if (path.startsWith("/dashboard/teachers")) {
-      if (role === "ADMIN") return NextResponse.next();
-      return NextResponse.redirect(new URL("/dashboard", req.url));
-    }
+  if (!req.nextUrl.pathname.startsWith("/dashboard")) {
+    return response;
+  }
 
-    if (path.startsWith("/dashboard/subscription-students")) {
-      if (role === "ADMIN") return NextResponse.next();
-      return NextResponse.redirect(new URL("/dashboard", req.url));
-    }
+  const token = await getToken({
+    req,
+    secret: nextAuthSecret,
+    decode: safeJwtDecode,
+  });
 
-    if (path.startsWith("/dashboard/students") || path.startsWith("/dashboard/courses/new")) {
-      if (path.startsWith("/dashboard/students")) {
-        if (role === "ADMIN" || role === "ASSISTANT_ADMIN") {
-          return NextResponse.next();
-        }
-        return NextResponse.redirect(new URL("/dashboard", req.url));
-      }
-      if (role === "ADMIN" || role === "ASSISTANT_ADMIN" || role === "TEACHER") {
-        return NextResponse.next();
-      }
-      return NextResponse.redirect(new URL("/dashboard", req.url));
-    }
+  if (!token) {
+    const login = new URL("/login", req.url);
+    login.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
+    const redirect = NextResponse.redirect(login);
+    return purgeInvalidSessionCookies(req, redirect);
+  }
 
-    const teacherBlocked =
-      role === "TEACHER" &&
-      (path.startsWith("/dashboard/settings/homepage") ||
-        path.startsWith("/dashboard/reviews") ||
-        path.startsWith("/dashboard/password-change-requests"));
-    if (teacherBlocked) {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
-    }
+  const role = token.role as string | undefined;
+  if (!role) {
+    return response;
+  }
 
-    return NextResponse.next();
-  },
-  { callbacks: { authorized: ({ token }) => !!token } }
-);
+  const roleRedirect = applyDashboardRoleChecks(req, role);
+  if (roleRedirect) {
+    return purgeInvalidSessionCookies(req, roleRedirect);
+  }
+
+  return response;
+}
 
 export const config = {
-  matcher: ["/dashboard/:path*"],
+  matcher: [
+    "/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\..*).*)",
+  ],
 };

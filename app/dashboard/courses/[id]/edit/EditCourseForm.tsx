@@ -15,6 +15,7 @@ import {
   serializeQuestionOptionsForApi,
   type QuizQuestionType,
 } from "@/lib/quiz-question-utils";
+import { isValidLessonVideoUrl } from "@/lib/lesson-video";
 
 type CategoryOption = { id: string; name: string; nameAr?: string | null };
 type LessonRow = { title: string; videoUrl: string; content: string; pdfUrl: string; acceptsHomework: boolean };
@@ -301,6 +302,14 @@ export function EditCourseForm({ courseId, initialData }: { courseId: string; in
     setError("");
     setLoading(true);
     try {
+    const invalidVideoLesson = lessons.findIndex(
+      (l) => l.videoUrl.trim() && !isValidLessonVideoUrl(l.videoUrl)
+    );
+    if (invalidVideoLesson >= 0) {
+      setError(t(`${Cf}.invalidVideoUrl`));
+      return;
+    }
+
     const validLessons = lessons.filter((l) => l.title.trim());
     const validQuizzes = quizzes
       .filter((q) => q.title.trim())
@@ -544,7 +553,8 @@ export function EditCourseForm({ courseId, initialData }: { courseId: string; in
             </div>
             <div className="space-y-2">
               <input type="text" value={lesson.title} onChange={(e) => updateLesson(i, "title", e.target.value)} placeholder={t(`${Cf}.lessonTitlePlaceholder`)} className="w-full rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm" />
-              <input type="url" value={lesson.videoUrl} onChange={(e) => updateLesson(i, "videoUrl", e.target.value)} placeholder={t(`${Cf}.youtubePlaceholder`)} className="w-full rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm" />
+              <input type="url" value={lesson.videoUrl} onChange={(e) => updateLesson(i, "videoUrl", e.target.value)} placeholder={t(`${Cf}.videoUrlPlaceholder`)} className="w-full rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm" />
+              <p className="text-xs text-[var(--color-muted)]">{t(`${Cf}.videoUrlHint`)}</p>
               <div>
                 <label className="block text-xs text-[var(--color-muted)]">{t(`${Cf}.lessonPdfOptional`)}</label>
                 {lesson.pdfUrl ? (

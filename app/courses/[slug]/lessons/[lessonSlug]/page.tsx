@@ -10,7 +10,7 @@ import {
   ensureUserCopyrightCode,
   getHomepageSettings,
 } from "@/lib/db";
-import { YouTubeOverlayPlayer } from "@/components/YouTubeOverlayPlayer";
+import { LessonVideoPlayer } from "@/components/LessonVideoPlayer";
 import { CourseOutlineSidebar } from "@/components/CourseOutlineSidebar";
 import { LessonHomeworkSection } from "./LessonHomeworkSection";
 import { LessonRatingSection } from "./LessonRatingSection";
@@ -158,7 +158,7 @@ export default async function LessonPage({ params }: Props) {
 
           {videoUrl && (
             <div className="mt-6 w-full min-w-0">
-              <YouTubeOverlayPlayer
+              <LessonVideoPlayer
                 videoUrl={videoUrl}
                 title={lessonTitle}
                 studentCopyrightCode={studentCopyrightCode}

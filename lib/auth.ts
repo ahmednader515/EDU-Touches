@@ -1,32 +1,14 @@
 import type { NextAuthOptions } from "next-auth";
-import { decode as defaultJwtDecode } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import { randomUUID } from "crypto";
 import { getUserByEmailOrPhone, getCurrentSessionId, setCurrentSessionId } from "@/lib/db";
 import type { UserRole } from "@/lib/types";
 import { CONCURRENT_SESSION_ERROR } from "@/lib/auth-constants";
+import { nextAuthSecret, safeJwtDecode } from "@/lib/auth-jwt";
 
 export { CONCURRENT_SESSION_ERROR };
-
-/**
- * NextAuth requires a stable secret. If NEXTAUTH_SECRET is missing, NextAuth hashes the whole
- * config object — that hash changes on hot reload / edits and breaks existing session cookies
- * (JWEDecryptionFailed). In development only, use a fixed fallback when env is unset.
- */
-function resolveNextAuthSecret(): string {
-  const fromEnv =
-    process.env.NEXTAUTH_SECRET?.trim() || process.env.AUTH_SECRET?.trim();
-  if (fromEnv) return fromEnv;
-  if (process.env.NODE_ENV !== "production") {
-    return "local-dev-only-nextauth-secret-not-for-production";
-  }
-  throw new Error(
-    "NEXTAUTH_SECRET or AUTH_SECRET must be set in production. See .env.example."
-  );
-}
-
-const nextAuthSecret = resolveNextAuthSecret();
+export { SESSION_COOKIE_NAMES, nextAuthSecret, resolveNextAuthSecret, safeJwtDecode } from "@/lib/auth-jwt";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -93,14 +75,15 @@ export const authOptions: NextAuthOptions = {
     error: "/login",
   },
   secret: nextAuthSecret,
+  logger: {
+    error(code, metadata) {
+      if (code === "JWT_SESSION_ERROR") return;
+      console.error(`[next-auth][error][${code}]`, metadata);
+    },
+  },
   jwt: {
     async decode(params) {
-      try {
-        return await defaultJwtDecode(params);
-      } catch {
-        // Stale cookie after secret rotation, or legacy token from unstable default secret
-        return null;
-      }
+      return safeJwtDecode(params);
     },
   },
 };

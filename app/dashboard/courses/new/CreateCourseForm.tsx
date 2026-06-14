@@ -14,6 +14,7 @@ import {
   serializeQuestionOptionsForApi,
   type QuizQuestionType,
 } from "@/lib/quiz-question-utils";
+import { isValidLessonVideoUrl } from "@/lib/lesson-video";
 
 type CategoryOption = { id: string; name: string; nameAr?: string | null };
 type LessonRow = { title: string; videoUrl: string; content: string; pdfUrl: string; acceptsHomework: boolean };
@@ -241,6 +242,15 @@ export function CreateCourseForm() {
     setError("");
     setLoading(true);
     try {
+    const invalidVideoLesson = lessons.findIndex(
+      (l) => l.videoUrl.trim() && !isValidLessonVideoUrl(l.videoUrl)
+    );
+    if (invalidVideoLesson >= 0) {
+      setError(t(`${Cf}.invalidVideoUrl`));
+      setLoading(false);
+      return;
+    }
+
     const slug = slugify(form.titleEn || form.titleAr || "course");
     const validLessons = lessons.filter((l) => l.title.trim());
     const validQuizzes = quizzes
@@ -551,9 +561,10 @@ export function CreateCourseForm() {
                 type="url"
                 value={lesson.videoUrl}
                 onChange={(e) => updateLesson(i, "videoUrl", e.target.value)}
-                placeholder={t(`${Cf}.youtubePlaceholder`)}
+                placeholder={t(`${Cf}.videoUrlPlaceholder`)}
                 className="w-full rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
               />
+              <p className="text-xs text-[var(--color-muted)]">{t(`${Cf}.videoUrlHint`)}</p>
               <div>
                 <label className="block text-xs text-[var(--color-muted)]">{t(`${Cf}.lessonPdfOptional`)}</label>
                 {lesson.pdfUrl ? (

@@ -18,6 +18,7 @@ import {
   createOptionsForQuestion,
   type QuestionInput,
 } from "@/lib/quiz-question-utils";
+import { normalizeLessonVideoUrl } from "@/lib/lesson-video";
 
 export async function GET() {
   try {
@@ -155,6 +156,13 @@ export async function POST(request: NextRequest) {
 
   for (let i = 0; i < lessons.length; i++) {
     const le = lessons[i];
+    const videoRaw = le.videoUrl?.trim();
+    if (videoRaw && !normalizeLessonVideoUrl(videoRaw)) {
+      return NextResponse.json(
+        { error: "رابط الفيديو غير صالح. استخدم رابط يوتيوب أو Google Drive فقط." },
+        { status: 400 }
+      );
+    }
     const lessonSlug = `${slug.trim()}-${i + 1}`.replace(/\s+/g, "-");
     const order = contentOrder.findIndex((e) => e.type === "lesson" && e.index === i);
     const orderVal = order >= 0 ? order : i;
@@ -164,7 +172,7 @@ export async function POST(request: NextRequest) {
       title_ar: (le as { titleAr?: string }).titleAr?.trim() || null,
       slug: lessonSlug,
       content: le.content?.trim() || null,
-      video_url: le.videoUrl?.trim() || null,
+      video_url: normalizeLessonVideoUrl(le.videoUrl) ?? null,
       pdf_url: le.pdfUrl?.trim() || null,
       order: orderVal,
       accepts_homework: !!(le as { acceptsHomework?: boolean }).acceptsHomework,
