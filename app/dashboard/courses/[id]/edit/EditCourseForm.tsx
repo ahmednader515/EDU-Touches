@@ -16,9 +16,26 @@ import {
   type QuizQuestionType,
 } from "@/lib/quiz-question-utils";
 import { isValidLessonVideoUrl } from "@/lib/lesson-video";
+import {
+  LessonVideoQuestionsEditor,
+  defaultLessonVideoQuestionRow,
+  defaultLessonVideoQuestionRowTf,
+  type LessonVideoQuestionRow,
+} from "@/components/dashboard/LessonVideoQuestionsEditor";
+import {
+  parseTimeToSeconds,
+  serializeLessonVideoQuestionsForApi,
+} from "@/lib/lesson-video-question-utils";
 
 type CategoryOption = { id: string; name: string; nameAr?: string | null };
-type LessonRow = { title: string; videoUrl: string; content: string; pdfUrl: string; acceptsHomework: boolean };
+type LessonRow = {
+  title: string;
+  videoUrl: string;
+  content: string;
+  pdfUrl: string;
+  acceptsHomework: boolean;
+  videoQuestions: LessonVideoQuestionRow[];
+};
 type QuizRow = { title: string; timeLimitMinutes: string; questions: QuestionRow[] };
 
 export type ContentOrderEntry = { type: "lesson"; index: number } | { type: "quiz"; index: number };
@@ -43,12 +60,19 @@ type InitialData = {
   isPublished: boolean;
   maxQuizAttempts: number | null;
   categoryId: string;
-  lessons: LessonRow[];
+  lessons: Array<LessonRow & { videoQuestions?: LessonVideoQuestionRow[] }>;
   quizzes: InitialQuizRow[];
   contentOrder: ContentOrderEntry[];
 };
 
-const defaultLesson: LessonRow = { title: "", videoUrl: "", content: "", pdfUrl: "", acceptsHomework: false };
+const defaultLesson: LessonRow = {
+  title: "",
+  videoUrl: "",
+  content: "",
+  pdfUrl: "",
+  acceptsHomework: false,
+  videoQuestions: [],
+};
 const defaultQuiz: QuizRow = { title: "", timeLimitMinutes: "", questions: [{ type: "MULTIPLE_CHOICE", questionText: "", options: [{ text: "", isCorrect: false }] }] };
 
 export function EditCourseForm({ courseId, initialData }: { courseId: string; initialData: InitialData }) {
@@ -78,8 +102,12 @@ export function EditCourseForm({ courseId, initialData }: { courseId: string; in
       ? initialData.lessons.map((l) => {
           const r = l as Record<string, unknown>;
           return {
-            ...l,
+            title: String(l.title ?? ""),
+            videoUrl: String(l.videoUrl ?? ""),
+            content: String(l.content ?? ""),
+            pdfUrl: String(l.pdfUrl ?? ""),
             acceptsHomework: Boolean(r.acceptsHomework ?? r.accepts_homework ?? false),
+            videoQuestions: Array.isArray(l.videoQuestions) ? l.videoQuestions : [],
           };
         })
       : [defaultLesson]
@@ -161,6 +189,129 @@ export function EditCourseForm({ courseId, initialData }: { courseId: string; in
   }
   function updateLesson(i: number, field: keyof LessonRow, value: string | boolean) {
     setLessons((l) => l.map((x, idx) => (idx === i ? { ...x, [field]: value } : x)));
+  }
+
+  function addLessonVideoQuestion(li: number) {
+    setLessons((l) =>
+      l.map((x, i) =>
+        i === li
+          ? {
+              ...x,
+              videoQuestions: [
+                ...x.videoQuestions,
+                defaultLessonVideoQuestionRow({
+                  trueLabel: t(`${Cf}.trueOption`),
+                  falseLabel: t(`${Cf}.falseOption`),
+                }),
+              ],
+            }
+          : x
+      )
+    );
+  }
+  function removeLessonVideoQuestion(li: number, qti: number) {
+    setLessons((l) =>
+      l.map((x, i) =>
+        i === li ? { ...x, videoQuestions: x.videoQuestions.filter((_, j) => j !== qti) } : x
+      )
+    );
+  }
+  function updateLessonVideoQuestion(li: number, qti: number, field: keyof LessonVideoQuestionRow, value: string) {
+    setLessons((l) =>
+      l.map((x, i) =>
+        i === li
+          ? {
+              ...x,
+              videoQuestions: x.videoQuestions.map((q, j) => (j === qti ? { ...q, [field]: value } : q)),
+            }
+          : x
+      )
+    );
+  }
+  function setLessonVideoQuestionType(li: number, qti: number, type: LessonVideoQuestionRow["type"]) {
+    const tf = { trueLabel: t(`${Cf}.trueOption`), falseLabel: t(`${Cf}.falseOption`) };
+    setLessons((l) =>
+      l.map((x, i) =>
+        i === li
+          ? {
+              ...x,
+              videoQuestions: x.videoQuestions.map((q, j) =>
+                j === qti
+                  ? type === "TRUE_FALSE"
+                    ? { ...defaultLessonVideoQuestionRowTf(tf), questionText: q.questionText, showAtMmSs: q.showAtMmSs, durationSeconds: q.durationSeconds }
+                    : { ...defaultLessonVideoQuestionRow(tf), questionText: q.questionText, showAtMmSs: q.showAtMmSs, durationSeconds: q.durationSeconds }
+                  : q
+              ),
+            }
+          : x
+      )
+    );
+  }
+  function addLessonVideoQuestionOption(li: number, qti: number) {
+    setLessons((l) =>
+      l.map((x, i) =>
+        i === li
+          ? {
+              ...x,
+              videoQuestions: x.videoQuestions.map((q, j) =>
+                j === qti ? { ...q, options: [...q.options, { text: "", isCorrect: false }] } : q
+              ),
+            }
+          : x
+      )
+    );
+  }
+  function removeLessonVideoQuestionOption(li: number, qti: number, oi: number) {
+    setLessons((l) =>
+      l.map((x, i) =>
+        i === li
+          ? {
+              ...x,
+              videoQuestions: x.videoQuestions.map((q, j) =>
+                j === qti ? { ...q, options: q.options.filter((_, o) => o !== oi) } : q
+              ),
+            }
+          : x
+      )
+    );
+  }
+  function updateLessonVideoQuestionOption(
+    li: number,
+    qti: number,
+    oi: number,
+    field: "text" | "isCorrect",
+    value: string | boolean
+  ) {
+    setLessons((l) =>
+      l.map((x, i) =>
+        i === li
+          ? {
+              ...x,
+              videoQuestions: x.videoQuestions.map((q, j) =>
+                j === qti
+                  ? { ...q, options: q.options.map((o, oi2) => (oi2 === oi ? { ...o, [field]: value } : o)) }
+                  : q
+              ),
+            }
+          : x
+      )
+    );
+  }
+  function setLessonVideoQuestionCorrectOption(li: number, qti: number, oi: number) {
+    setLessons((l) =>
+      l.map((x, i) =>
+        i === li
+          ? {
+              ...x,
+              videoQuestions: x.videoQuestions.map((q, j) =>
+                j === qti
+                  ? { ...q, options: q.options.map((o, oi2) => ({ ...o, isCorrect: oi2 === oi })) }
+                  : q
+              ),
+            }
+          : x
+      )
+    );
   }
 
   function addQuiz() {
@@ -363,6 +514,15 @@ export function EditCourseForm({ courseId, initialData }: { courseId: string; in
         content: l.content.trim() || undefined,
         pdfUrl: l.pdfUrl.trim() || undefined,
         acceptsHomework: l.acceptsHomework,
+        videoQuestions: serializeLessonVideoQuestionsForApi(
+          l.videoQuestions.map((q) => ({
+            type: q.type,
+            questionText: q.questionText,
+            showAtSeconds: parseTimeToSeconds(q.showAtMmSs) ?? 0,
+            durationSeconds: parseInt(q.durationSeconds, 10) || 10,
+            options: q.options,
+          }))
+        ),
       })),
       quizzes: validQuizzes,
       contentOrder: filteredContentOrder,
@@ -555,6 +715,19 @@ export function EditCourseForm({ courseId, initialData }: { courseId: string; in
               <input type="text" value={lesson.title} onChange={(e) => updateLesson(i, "title", e.target.value)} placeholder={t(`${Cf}.lessonTitlePlaceholder`)} className="w-full rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm" />
               <input type="url" value={lesson.videoUrl} onChange={(e) => updateLesson(i, "videoUrl", e.target.value)} placeholder={t(`${Cf}.videoUrlPlaceholder`)} className="w-full rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm" />
               <p className="text-xs text-[var(--color-muted)]">{t(`${Cf}.videoUrlHint`)}</p>
+              <LessonVideoQuestionsEditor
+                lessonIndex={i}
+                videoUrl={lesson.videoUrl}
+                questions={lesson.videoQuestions}
+                onAddQuestion={() => addLessonVideoQuestion(i)}
+                onRemoveQuestion={(qti) => removeLessonVideoQuestion(i, qti)}
+                onUpdateQuestion={(qti, field, value) => updateLessonVideoQuestion(i, qti, field, value)}
+                onSetType={(qti, type) => setLessonVideoQuestionType(i, qti, type)}
+                onAddOption={(qti) => addLessonVideoQuestionOption(i, qti)}
+                onRemoveOption={(qti, oi) => removeLessonVideoQuestionOption(i, qti, oi)}
+                onUpdateOption={(qti, oi, field, value) => updateLessonVideoQuestionOption(i, qti, oi, field, value)}
+                onSetCorrectOption={(qti, oi) => setLessonVideoQuestionCorrectOption(i, qti, oi)}
+              />
               <div>
                 <label className="block text-xs text-[var(--color-muted)]">{t(`${Cf}.lessonPdfOptional`)}</label>
                 {lesson.pdfUrl ? (

@@ -347,6 +347,29 @@ export interface Lesson {
   updated_at: Date;
 }
 
+export type LessonVideoQuestionType = "MULTIPLE_CHOICE" | "TRUE_FALSE";
+
+export interface LessonVideoQuestion {
+  id: string;
+  lesson_id: string;
+  type: LessonVideoQuestionType;
+  question_text: string;
+  show_at_seconds: number;
+  duration_seconds: number;
+  order: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface LessonVideoQuestionOption {
+  id: string;
+  question_id: string;
+  text: string;
+  is_correct: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
 export type QuestionType = "MULTIPLE_CHOICE" | "ESSAY" | "TRUE_FALSE" | "FILL_IN" | "MATCH";
 
 export interface Quiz {

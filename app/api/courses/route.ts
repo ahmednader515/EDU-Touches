@@ -19,6 +19,8 @@ import {
   type QuestionInput,
 } from "@/lib/quiz-question-utils";
 import { normalizeLessonVideoUrl } from "@/lib/lesson-video";
+import { persistLessonVideoQuestions } from "@/lib/persist-lesson-video-questions";
+import type { LessonVideoQuestionInput } from "@/lib/lesson-video-question-utils";
 
 export async function GET() {
   try {
@@ -33,7 +35,15 @@ export async function GET() {
   }
 }
 
-type LessonInput = { title: string; titleAr?: string; videoUrl?: string; content?: string; pdfUrl?: string };
+type LessonInput = {
+  title: string;
+  titleAr?: string;
+  videoUrl?: string;
+  content?: string;
+  pdfUrl?: string;
+  acceptsHomework?: boolean;
+  videoQuestions?: LessonVideoQuestionInput[];
+};
 type QuizInput = { title: string; timeLimitMinutes?: number | null; questions: QuestionInput[] };
 
 export async function POST(request: NextRequest) {
@@ -166,7 +176,7 @@ export async function POST(request: NextRequest) {
     const lessonSlug = `${slug.trim()}-${i + 1}`.replace(/\s+/g, "-");
     const order = contentOrder.findIndex((e) => e.type === "lesson" && e.index === i);
     const orderVal = order >= 0 ? order : i;
-    await createLesson({
+    const lesson = await createLesson({
       course_id: course.id,
       title: le.title?.trim() || `حصة ${i + 1}`,
       title_ar: (le as { titleAr?: string }).titleAr?.trim() || null,
@@ -177,6 +187,9 @@ export async function POST(request: NextRequest) {
       order: orderVal,
       accepts_homework: !!(le as { acceptsHomework?: boolean }).acceptsHomework,
     });
+    if (Array.isArray(le.videoQuestions) && le.videoQuestions.length > 0) {
+      await persistLessonVideoQuestions(lesson.id, le.videoQuestions);
+    }
   }
 
   for (let qi = 0; qi < quizzes.length; qi++) {

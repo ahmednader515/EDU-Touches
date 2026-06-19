@@ -178,6 +178,17 @@ export const enMessages: Messages = {
     lessonRatingAverageLine: "Lesson rating: {rating}/5 ({count} ratings)",
     courseRatingAverageLine: "Course rating (all lessons): {rating}/5 ({count} ratings)",
   },
+  lesson: {
+    videoQuestions: {
+      multipleChoice: "Multiple choice",
+      trueFalse: "True/False",
+      tryAgain: "You can try another option while the question is visible.",
+      driveUnsupported:
+        "Timed video questions are not available for Google Drive videos. Use a YouTube link to enable them.",
+      continue: "Continue watching",
+      closesIn: "Closes in {time}",
+    },
+  },
   quiz: {
     invalidQuizId: "Invalid quiz ID",
     quizNotFound: "Quiz not found",
@@ -849,6 +860,15 @@ export const enMessages: Messages = {
       lessonTitlePlaceholder: `Lesson title`,
       videoUrlPlaceholder: `YouTube or Google Drive video URL`,
       videoUrlHint: `Use one link only — YouTube or Google Drive, not both.`,
+      videoQuestionsHeading: `Video questions`,
+      videoQuestionsIntro: `Questions appear over the video at the time you set (YouTube only). The video pauses until the student continues.`,
+      videoQuestionsDriveHint: `Timed overlays only work with YouTube videos.`,
+      videoQuestionsEmpty: `No video questions yet.`,
+      addVideoQuestionBtn: `+ Add video question`,
+      videoQuestionNPrefix: `Video question `,
+      videoQuestionShowAt: `Show at (m:ss)`,
+      videoQuestionDuration: `Visible for (seconds)`,
+      videoQuestionShowAtHint: `Example: 1:30 = 90 seconds into the video.`,
       invalidVideoUrl: `Invalid video link. Use a valid YouTube or Google Drive URL (one per lesson).`,
       youtubePlaceholder: `YouTube video URL`,
       lessonPdfOptional: `Lesson PDF (optional)`,

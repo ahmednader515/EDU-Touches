@@ -9,6 +9,7 @@ import {
   hasFullCourseAccessAsStudent,
   ensureUserCopyrightCode,
   getHomepageSettings,
+  getLessonVideoQuestionsByLessonId,
 } from "@/lib/db";
 import { LessonVideoPlayer } from "@/components/LessonVideoPlayer";
 import { CourseOutlineSidebar } from "@/components/CourseOutlineSidebar";
@@ -16,6 +17,7 @@ import { LessonHomeworkSection } from "./LessonHomeworkSection";
 import { LessonRatingSection } from "./LessonRatingSection";
 import { getLocaleFromCookie, getServerTranslator } from "@/lib/i18n/server";
 import { pickLocalizedText } from "@/lib/i18n/localized-field";
+import { mapDbVideoQuestionsToPayload } from "@/lib/lesson-video-question-utils";
 
 type Props = { params: Promise<{ slug: string; lessonSlug: string }> };
 
@@ -127,6 +129,10 @@ export default async function LessonPage({ params }: Props) {
   const copyrightOverlayStyle =
     homepageSettings.copyrightOverlayStyle === "watermark" ? "watermark" : "floating";
 
+  const lessonId = String(lessonObj.id ?? "");
+  const videoQuestionRows = lessonId ? await getLessonVideoQuestionsByLessonId(lessonId) : [];
+  const videoQuestions = mapDbVideoQuestionsToPayload(videoQuestionRows);
+
   const lessonsAll = (course.lessons ?? []) as Array<Record<string, unknown> & { id: string; title?: string; titleAr?: string | null }>;
   const lessons =
     !isStaff && !isEnrolled && !hasFullStudentAccess && allowedLessonIds.length > 0
@@ -163,6 +169,7 @@ export default async function LessonPage({ params }: Props) {
                 title={lessonTitle}
                 studentCopyrightCode={studentCopyrightCode}
                 copyrightOverlayStyle={copyrightOverlayStyle}
+                videoQuestions={videoQuestions}
               />
             </div>
           )}

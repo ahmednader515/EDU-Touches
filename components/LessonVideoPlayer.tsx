@@ -1,15 +1,23 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { YouTubeOverlayPlayer } from "@/components/YouTubeOverlayPlayer";
 import { getGoogleDrivePreviewUrl, getLessonVideoProvider } from "@/lib/lesson-video";
 import { useLocale, useT } from "@/components/LocaleProvider";
+
+import type { LessonVideoQuestionPayload } from "@/lib/lesson-video-question-utils";
+
+const YouTubeOverlayPlayer = dynamic(
+  () => import("@/components/YouTubeOverlayPlayer").then((m) => m.YouTubeOverlayPlayer),
+  { ssr: false, loading: () => <div className="aspect-video w-full animate-pulse rounded-[var(--radius-card)] bg-[var(--color-border)]" /> }
+);
 
 type Props = {
   videoUrl: string;
   title: string;
   studentCopyrightCode?: string | null;
   copyrightOverlayStyle?: "floating" | "watermark";
+  videoQuestions?: LessonVideoQuestionPayload[];
 };
 
 function VideoCopyrightFloatingBadge({
@@ -65,6 +73,7 @@ function GoogleDriveVideoPlayer({
   title,
   studentCopyrightCode,
   copyrightOverlayStyle = "floating",
+  videoQuestions = [],
 }: Props) {
   const t = useT();
   const locale = useLocale();
@@ -73,6 +82,12 @@ function GoogleDriveVideoPlayer({
   if (!embedUrl) return null;
 
   return (
+    <div className="space-y-2">
+      {videoQuestions.length > 0 && (
+        <p className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+          {t("lesson.videoQuestions.driveUnsupported", "Timed video questions are not available for Google Drive videos. Use a YouTube link to enable them.")}
+        </p>
+      )}
     <div className="relative aspect-video w-full overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)] bg-black">
       <iframe
         src={embedUrl}
@@ -105,16 +120,17 @@ function GoogleDriveVideoPlayer({
             )
         : null}
     </div>
+    </div>
   );
 }
 
-export function LessonVideoPlayer(props: Props) {
+export function LessonVideoPlayer({ videoQuestions = [], ...props }: Props) {
   const provider = getLessonVideoProvider(props.videoUrl);
   if (provider === "youtube") {
-    return <YouTubeOverlayPlayer {...props} />;
+    return <YouTubeOverlayPlayer {...props} videoQuestions={videoQuestions} />;
   }
   if (provider === "google_drive") {
-    return <GoogleDriveVideoPlayer {...props} />;
+    return <GoogleDriveVideoPlayer {...props} videoQuestions={videoQuestions} />;
   }
   return null;
 }

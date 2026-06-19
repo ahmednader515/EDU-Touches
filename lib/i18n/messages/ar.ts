@@ -178,6 +178,17 @@ export const arMessages: Messages = {
     lessonRatingAverageLine: "تقييم الحصة: {rating}/5 ({count} تقييم)",
     courseRatingAverageLine: "تقييم الكورس (كل الحصص): {rating}/5 ({count} تقييم)",
   },
+  lesson: {
+    videoQuestions: {
+      multipleChoice: "اختياري من متعدد",
+      trueFalse: "صح وخطأ",
+      tryAgain: "يمكنك تجربة خيار آخر طالما السؤال ظاهر.",
+      driveUnsupported:
+        "أسئلة الفيديو الموقّتة غير متاحة لفيديو Google Drive. استخدم رابط يوتيوب لتفعيلها.",
+      continue: "متابعة المشاهدة",
+      closesIn: "يُغلق خلال {time}",
+    },
+  },
   quiz: {
     invalidQuizId: "معرّف الاختبار غير صالح",
     quizNotFound: "الاختبار غير موجود",
@@ -847,6 +858,15 @@ export const arMessages: Messages = {
       lessonTitlePlaceholder: `عنوان الحصة`,
       videoUrlPlaceholder: `رابط فيديو يوتيوب أو Google Drive`,
       videoUrlHint: `رابط واحد فقط — يوتيوب أو Google Drive، وليس كلاهما.`,
+      videoQuestionsHeading: `أسئلة الفيديو`,
+      videoQuestionsIntro: `تظهر الأسئلة فوق الفيديو في الوقت الذي تحدده (يوتيوب فقط). يتوقف الفيديو حتى يتابع الطالب.`,
+      videoQuestionsDriveHint: `الأسئلة الموقّتة تعمل مع فيديو يوتيوب فقط.`,
+      videoQuestionsEmpty: `لا توجد أسئلة فيديو بعد.`,
+      addVideoQuestionBtn: `+ إضافة سؤال فيديو`,
+      videoQuestionNPrefix: `سؤال فيديو `,
+      videoQuestionShowAt: `الظهور عند (د:ث)`,
+      videoQuestionDuration: `مدة الظهور (ثوانٍ)`,
+      videoQuestionShowAtHint: `مثال: 1:30 = بعد 90 ثانية من بداية الفيديو.`,
       invalidVideoUrl: `رابط الفيديو غير صالح. استخدم رابط يوتيوب أو Google Drive صحيح (رابط واحد لكل حصة).`,
       youtubePlaceholder: `رابط فيديو يوتيوب`,
       lessonPdfOptional: `ملف PDF للحصة (اختياري)`,

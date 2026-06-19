@@ -3578,6 +3578,115 @@ export async function createLesson(data: {
   return l;
 }
 
+function ensureLessonVideoQuestionTables(): Promise<void> {
+  return ensureOnce("ensureLessonVideoQuestionTables", async () => {
+    await sql`
+      CREATE TABLE IF NOT EXISTS "LessonVideoQuestion" (
+        id                TEXT PRIMARY KEY,
+        lesson_id         TEXT NOT NULL REFERENCES "Lesson"(id) ON DELETE CASCADE,
+        type              TEXT NOT NULL CHECK (type IN ('MULTIPLE_CHOICE', 'TRUE_FALSE')),
+        question_text     TEXT NOT NULL,
+        show_at_seconds   INT NOT NULL DEFAULT 0,
+        duration_seconds  INT NOT NULL DEFAULT 10,
+        "order"           INT NOT NULL DEFAULT 0,
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS "LessonVideoQuestion_lesson_id_idx" ON "LessonVideoQuestion"(lesson_id)`;
+    await sql`
+      CREATE TABLE IF NOT EXISTS "LessonVideoQuestionOption" (
+        id          TEXT PRIMARY KEY,
+        question_id TEXT NOT NULL REFERENCES "LessonVideoQuestion"(id) ON DELETE CASCADE,
+        text        TEXT NOT NULL,
+        is_correct  BOOLEAN NOT NULL DEFAULT false,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS "LessonVideoQuestionOption_question_id_idx" ON "LessonVideoQuestionOption"(question_id)`;
+  });
+}
+
+export async function createLessonVideoQuestion(data: {
+  lesson_id: string;
+  type: "MULTIPLE_CHOICE" | "TRUE_FALSE";
+  question_text: string;
+  show_at_seconds: number;
+  duration_seconds: number;
+  order: number;
+}): Promise<{ id: string }> {
+  await ensureLessonVideoQuestionTables();
+  const id = generateId();
+  await sql`
+    INSERT INTO "LessonVideoQuestion" (id, lesson_id, type, question_text, show_at_seconds, duration_seconds, "order")
+    VALUES (${id}, ${data.lesson_id}, ${data.type}, ${data.question_text}, ${data.show_at_seconds}, ${data.duration_seconds}, ${data.order})
+  `;
+  return { id };
+}
+
+export async function createLessonVideoQuestionOption(data: {
+  question_id: string;
+  text: string;
+  is_correct: boolean;
+}): Promise<void> {
+  const id = generateId();
+  await sql`
+    INSERT INTO "LessonVideoQuestionOption" (id, question_id, text, is_correct)
+    VALUES (${id}, ${data.question_id}, ${data.text}, ${data.is_correct})
+  `;
+}
+
+export async function getLessonVideoQuestionsByLessonIds(
+  lessonIds: string[]
+): Promise<Map<string, Array<Record<string, unknown> & { options: Record<string, unknown>[] }>>> {
+  const map = new Map<string, Array<Record<string, unknown> & { options: Record<string, unknown>[] }>>();
+  if (lessonIds.length === 0) return map;
+  for (const lid of lessonIds) map.set(lid, []);
+
+  await ensureLessonVideoQuestionTables();
+
+  const questionRows = await sql`
+    SELECT * FROM "LessonVideoQuestion"
+    WHERE lesson_id = ANY(${lessonIds})
+    ORDER BY lesson_id, "order" ASC
+  `;
+  const questions = questionRows as Record<string, unknown>[];
+  if (questions.length === 0) return map;
+
+  const questionIds = questions.map((q) => String(q.id));
+  const optRows = await sql`
+    SELECT * FROM "LessonVideoQuestionOption"
+    WHERE question_id = ANY(${questionIds})
+    ORDER BY question_id, id
+  `;
+  const optsByQuestion = new Map<string, Record<string, unknown>[]>();
+  for (const o of optRows as Record<string, unknown>[]) {
+    const qid = String(o.question_id);
+    const list = optsByQuestion.get(qid) ?? [];
+    list.push(rowToCamel(o)!);
+    optsByQuestion.set(qid, list);
+  }
+
+  for (const q of questions) {
+    const lessonId = String(q.lesson_id);
+    const list = map.get(lessonId) ?? [];
+    list.push({
+      ...rowToCamel(q)!,
+      options: optsByQuestion.get(String(q.id)) ?? [],
+    });
+    map.set(lessonId, list);
+  }
+  return map;
+}
+
+export async function getLessonVideoQuestionsByLessonId(
+  lessonId: string
+): Promise<Array<Record<string, unknown> & { options: Record<string, unknown>[] }>> {
+  const map = await getLessonVideoQuestionsByLessonIds([lessonId]);
+  return map.get(lessonId) ?? [];
+}
+
 export async function deleteLessonsByCourseId(courseId: string): Promise<void> {
   await sql`DELETE FROM "Lesson" WHERE course_id = ${courseId}`;
 }
@@ -3649,9 +3758,16 @@ export async function getCourseForEdit(courseId: string): Promise<{
     quizzes.push({ ...rowToCamel(q)!, questions });
   }
 
+  const lessonIds = (lessonRows as { id: string }[]).map((l) => l.id);
+  const videoQuestionsByLesson = await getLessonVideoQuestionsByLessonIds(lessonIds);
+  const lessons = rowsToCamel(lessonRows as Record<string, unknown>[]).map((l) => ({
+    ...l,
+    videoQuestions: videoQuestionsByLesson.get(String((l as Record<string, unknown>).id)) ?? [],
+  }));
+
   return {
     course: rowToCamel(courseRow)!,
-    lessons: rowsToCamel(lessonRows as Record<string, unknown>[]),
+    lessons,
     quizzes,
   };
 }

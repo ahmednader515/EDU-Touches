@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { getCourseForEdit } from "@/lib/db";
 import { canManageCourse } from "@/lib/permissions";
 import { EditCourseForm, type ContentOrderEntry } from "./EditCourseForm";
+import { formatSecondsToMmSs } from "@/lib/lesson-video-question-utils";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -71,12 +72,23 @@ export default async function EditCoursePage({ params }: Props) {
     categoryId: (c.categoryId ?? c.category_id ?? "") as string,
     lessons: data.lessons.map((l) => {
       const row = l as Record<string, unknown>;
+      const videoQuestions = (row.videoQuestions ?? []) as Array<Record<string, unknown>>;
       return {
         title: String(row.title ?? ""),
         videoUrl: String(row.videoUrl ?? row.video_url ?? ""),
         content: String(row.content ?? ""),
         pdfUrl: String(row.pdfUrl ?? row.pdf_url ?? ""),
         acceptsHomework: Boolean(row.acceptsHomework ?? row.accepts_homework ?? false),
+        videoQuestions: videoQuestions.map((vq) => ({
+          type: (vq.type === "TRUE_FALSE" ? "TRUE_FALSE" : "MULTIPLE_CHOICE") as "MULTIPLE_CHOICE" | "TRUE_FALSE",
+          questionText: String(vq.questionText ?? vq.question_text ?? ""),
+          showAtMmSs: formatSecondsToMmSs(Number(vq.showAtSeconds ?? vq.show_at_seconds ?? 0)),
+          durationSeconds: String(Number(vq.durationSeconds ?? vq.duration_seconds ?? 10)),
+          options: ((vq.options ?? []) as Array<Record<string, unknown>>).map((o) => ({
+            text: String(o.text ?? ""),
+            isCorrect: Boolean(o.isCorrect ?? o.is_correct),
+          })),
+        })),
       };
     }),
     quizzes: data.quizzes.map((q) => {

@@ -483,3 +483,8 @@ html:not(.light):not(.dark) .home-teachers-hero-blend {
 .plyr-lesson-video .plyr__video-embed iframe {
   border-radius: var(--radius-card);
 }
+
+/* Video question overlay inside Plyr (normal + fullscreen) */
+.plyr .lesson-video-question-overlay {
+  border-radius: inherit;
+}
