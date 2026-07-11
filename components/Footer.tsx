@@ -28,7 +28,7 @@ export async function Footer({
               {footerTagline?.trim() || defaultTagline}
             </p>
           </div>
-          <div className="flex gap-6">
+          <div className="flex flex-wrap gap-6">
             <Link
               href="/"
               className="text-sm text-neutral-400 transition hover:text-white"
@@ -40,6 +40,12 @@ export async function Footer({
               className="text-sm text-neutral-400 transition hover:text-white"
             >
               {t("common.courses", "Courses")}
+            </Link>
+            <Link
+              href="/privacy"
+              className="text-sm text-neutral-400 transition hover:text-white"
+            >
+              {t("common.privacy", "Privacy Policy")}
             </Link>
           </div>
         </div>

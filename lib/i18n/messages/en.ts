@@ -5,6 +5,7 @@ export const enMessages: Messages = {
   common: {
     home: "Home",
     courses: "Courses",
+    privacy: "Privacy Policy",
     loading: "Loading",
     pleaseWait: "Please wait...",
     free: "Free",
@@ -48,6 +49,43 @@ export const enMessages: Messages = {
     defaultTitle: "My Learning Platform",
     defaultTagline: "Learn with a modern and clear method",
     defaultCopyright: "My Learning Platform. All rights reserved.",
+  },
+  privacy: {
+    title: "Privacy Policy",
+    lastUpdated: "Last updated: July 12, 2026",
+    intro:
+      "This Privacy Policy explains how {platform} (“we”, “us”, or “our”) collects, uses, and protects your personal information when you use our educational platform and related services.",
+    s1Title: "1. Information we collect",
+    s1Body:
+      "Depending on how you use the platform, we may collect: account details (such as name, email, phone number, and password); enrollment and subscription information; course progress, quiz attempts, homework submissions, and lesson ratings; messages you send to support or staff; payment or balance-related details needed to process purchases or activations; and technical data such as browser type, device information, and approximate usage logs needed to keep the service secure and working.",
+    s2Title: "2. How we use your information",
+    s2Body:
+      "We use your information to create and manage your account; provide courses, videos, quizzes, live streams, and other learning features; process enrollments, activation codes, and platform subscriptions; respond to support requests; improve platform performance and content; protect against abuse, unauthorized sharing, and copyright infringement (including student copyright codes shown on videos where applicable); and comply with legal obligations.",
+    s3Title: "3. Cookies and sessions",
+    s3Body:
+      "We use cookies and similar technologies for essential functions such as keeping you signed in, remembering language and theme preferences, and maintaining session security. These are necessary for the platform to work as expected. You can control cookies through your browser settings, but disabling essential cookies may limit some features.",
+    s4Title: "4. Video and third-party services",
+    s4Body:
+      "Lesson videos may be hosted on third-party providers such as YouTube or Google Drive. When you watch embedded content, those providers may collect data according to their own privacy policies. We also rely on infrastructure and service providers (for example hosting, databases, and authentication) to operate the platform. Those providers process data only as needed to deliver their services to us.",
+    s5Title: "5. Sharing of information",
+    s5Body:
+      "We do not sell your personal information. We may share limited data with teachers or staff who need it to manage courses, homework, and support; with service providers who help us run the platform under appropriate safeguards; and with authorities when required by law or to protect rights, safety, or the integrity of our content.",
+    s6Title: "6. Data retention and security",
+    s6Body:
+      "We keep your information for as long as your account is active and as needed to provide the service, resolve disputes, enforce our policies, and meet legal requirements. We use reasonable technical and organizational measures to protect your data, but no method of transmission or storage is completely secure.",
+    s7Title: "7. Your choices and rights",
+    s7Body:
+      "You may update certain account details from your profile, request help correcting inaccurate information, or ask about deleting or restricting your account where applicable. If you have questions about your data or wish to exercise available rights, contact us using the channels below. We may need to verify your identity before fulfilling certain requests.",
+    s8Title: "8. Children’s privacy",
+    s8Body:
+      "The platform is intended for students and learners who are allowed to use educational services under applicable law and with guardian consent where required. If you believe a child’s information was submitted without appropriate consent, please contact us so we can review and take suitable action.",
+    s9Title: "9. Changes to this policy",
+    s9Body:
+      "We may update this Privacy Policy from time to time. When we do, we will revise the “Last updated” date on this page. Continued use of the platform after changes means you acknowledge the updated policy.",
+    s10Title: "10. Contact us",
+    s10Body:
+      "If you have questions about this Privacy Policy or how we handle personal data, contact us through the support channels available on the platform (such as WhatsApp or messaging), or reach out using the contact details published on our homepage.",
+    contactWhatsApp: "Contact via WhatsApp",
   },
   auth: {
     login: {
